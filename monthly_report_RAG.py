@@ -13,12 +13,13 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+import re
 
 LOGGER = logging.getLogger("monthly_report_RAG")
 EXCLUDED_TAGS = {"script", "style", "noscript"}
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
-DEFAULT_GPT_MODEL = "gpt-5.2-2025-12-11"
-
+# DEFAULT_GPT_MODEL = "gpt-5.2"
+DEFAULT_GPT_MODEL = "gpt-5-nano"
 
 class HTMLTextExtractor(HTMLParser):
     def __init__(self) -> None:
@@ -375,11 +376,18 @@ def query_index(
     for doc_id, _score in ranked_docs:
         best = doc_best_chunks[doc_id][:2]
         for chunk in best:
+            author, year_month = infer_author_and_year_month(
+                file_path=chunk.get("file_path", ""),
+                title=chunk.get("title", ""),
+                excerpt=chunk.get("text", ""),
+            )
             references.append(
                 {
                     "title": chunk.get("title", ""),
                     "file_path": chunk.get("file_path", ""),
                     "excerpt": chunk.get("text", ""),
+                    "author": author,
+                    "year_month": year_month,
                 }
             )
 
@@ -390,6 +398,8 @@ def query_index(
         block = (
             f"[{i}] title: {ref['title']}\n"
             f"path: {ref['file_path']}\n"
+            f"author: {ref['author']}\n"
+            f"year_month: {ref['year_month']}\n"
             f"excerpt: {ref['excerpt']}\n"
         )
         if used + len(block) > max_chars:
@@ -400,7 +410,9 @@ def query_index(
     prompt = (
         "あなたは社内文書検索アシスタントです。\n"
         "以下の文書抜粋のみを根拠として回答してください。\n"
-        "推測や補完は禁止です。\n\n"
+        "推測や補完は禁止です。\n"
+        "回答本文には、該当の月報を書いた人の名前と、何年何月のファイルかを必ず含めてください。\n"
+        "情報が根拠文書にない場合は『不明』と明記してください。\n\n"
         f"[検索クエリ]\n{query}\n\n"
         f"[参考文書]\n{''.join(ref_texts)}"
     )
@@ -419,6 +431,38 @@ def query_index(
     for path in used_paths:
         print(path)
 
+
+
+
+def infer_author_and_year_month(file_path: str, title: str, excerpt: str) -> Tuple[str, str]:
+    base = f"{file_path} {title} {excerpt}"
+
+    author = "不明"
+    year_month = "不明"
+
+    author_patterns = [
+        r"(?:作成者|作成|氏名|担当)[:：]\s*([ぁ-んァ-ン一-龥ー々]{2,40})",
+        r"([ぁ-んァ-ン一-龥ー々]{2,40})\s*(?:さん|氏)\s*(?:の|作成)",
+        r"/月報/([ぁ-んァ-ン一-龥ー々]{2,40})/",
+    ]
+    for pat in author_patterns:
+        m = re.search(pat, base)
+        if m:
+            author = m.group(1)
+            break
+
+    ym_patterns = [
+        r"(20\d{2})[-_/年](0?[1-9]|1[0-2])(?:月)?",
+        r"(20\d{2})(0[1-9]|1[0-2])",
+    ]
+    for pat in ym_patterns:
+        m = re.search(pat, base)
+        if m:
+            y, mo = m.group(1), m.group(2).zfill(2)
+            year_month = f"{y}年{mo}月"
+            break
+
+    return author, year_month
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="monthly_report_RAG")
