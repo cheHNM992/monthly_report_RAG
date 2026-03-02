@@ -409,11 +409,15 @@ def query_index(
 
     print("\n=== 回答 ===")
     print(answer.strip())
-    print("\n=== 参照文書 ===")
-    for i, ref in enumerate(references[: len(ref_texts)], start=1):
-        print(f"[{i}] {ref['title']}")
-        print(f"  path: {ref['file_path']}")
-        print(f"  excerpt: {ref['excerpt'][:220]}...")
+    print("\n=== 参照ファイルパス ===")
+    used_paths: List[str] = []
+    for ref in references[: len(ref_texts)]:
+        path = ref["file_path"]
+        if path and path not in used_paths:
+            used_paths.append(path)
+
+    for path in used_paths:
+        print(path)
 
 
 def build_parser() -> argparse.ArgumentParser:
