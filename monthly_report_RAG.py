@@ -18,8 +18,8 @@ import re
 LOGGER = logging.getLogger("monthly_report_RAG")
 EXCLUDED_TAGS = {"script", "style", "noscript"}
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
-DEFAULT_GPT_MODEL = "gpt-5.2-2025-12-11"
-
+# DEFAULT_GPT_MODEL = "gpt-5.2"
+DEFAULT_GPT_MODEL = "gpt-5-nano"
 
 class HTMLTextExtractor(HTMLParser):
     def __init__(self) -> None:
